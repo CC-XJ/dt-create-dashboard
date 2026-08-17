@@ -64,7 +64,6 @@ When an optional section (Network Analysis, User Satisfaction Overview) is inclu
 1. **Tile ID collisions**: `ops_optional_components.json` reuses low numeric tile IDs (`"0"`–`"13"`) that can collide with core dashboard tile IDs. Renumber optional tile IDs into an unused range before merging (e.g. offset by 1000).
 2. **Layout Y-offset**: every layout entry in the optional asset starts at `y: 0`, assuming it's the only content on the page. When merging, shift all optional `y` values so the section starts below the lowest point of the core dashboard's layout (i.e. `new_y = old_y + (max(core_y + core_h))`).
 3. **Variable de-duplication**: `ops_optional_components.json` independently defines a `Host_Name` variable that also exists in `ops_dashboard_example.json`. If the core dashboard already defines a variable with the same key, reuse it do not add a second definition with the same key.
-4. **Placeholder resolution**: the `code`-type tiles in the optional asset (Customer Satisfaction, Apdex tiles) contain an `AppName` placeholder that must be resolved to the real application name for this tenant/user request before the tile is included — see asset-level note below.
 
 ## Notes
 

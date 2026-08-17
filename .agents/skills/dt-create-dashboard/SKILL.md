@@ -35,14 +35,12 @@ Read the `dt-app-dashboards` skill for the dashboard JSON structure: tile types,
    - **Tile IDs**: renumber optional-component tile IDs so they don't collide with existing core tile IDs (e.g. offset optional IDs by 1000+).
    - **Layout Y-offset**: shift every optional tile's `y` value so it starts below the lowest point of the core layout (`max(y + h)` across all core tiles), not at `y: 0`.
    - **Variables**: if a variable key already exists (e.g. `Host_Name`), reuse it do not add a duplicate definition.
-4. Resolve every placeholder token (e.g. `{{APP_NAME}}`) against data confirmed in Step 3 or explicitly provided by the user. Never leave a `{{...}}` token in JSON that will be passed to `dtctl apply`.
-5. Save the result to the working directory `/dashboards`.
+4. Save the result to the working directory `/dashboards`.
 
 ### Step 5 — Validate and confirm before applying
 
-1. Check the constructed JSON is well-formed and contains no leftover `{{placeholder}}` tokens or example/default values copied verbatim from reference assets.
-2. Present a short summary to the user before deploying: dashboard name, sections included, tile count, and the key metrics/entities used.
-3. Get explicit confirmation from the user before proceeding to Step 6. This is a write action against a live tenant do not auto-apply.
+1. Present a short summary to the user before deploying: dashboard name, sections included, tile count, and the key metrics/entities used.
+2. Get explicit confirmation from the user before proceeding to Step 6. This is a write action against a live tenant do not auto-apply.
 
 ### Step 6 — Apply the dashboard
 
@@ -68,5 +66,4 @@ dtctl apply dashboard -f <dashboard.json>
 - Don't attempt to obtain or use dtctl oauth token.
 - Don't use dtctl for any other purpose than to create/apply the dashboard to the environment.
 - Don't auto-retry failed `dtctl apply` calls with modified JSON.
-- Don't copy `AppName`, entity IDs, tenant IDs, or other environment-specific literals from reference assets without re-resolving them for the current tenant, reference assets contain illustrative values only, not real defaults.
 - Don't apply a dashboard to the tenant without first showing the user the Step 5 summary and getting confirmation.
