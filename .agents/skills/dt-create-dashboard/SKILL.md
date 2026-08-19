@@ -1,69 +1,67 @@
 ---
 name: dt-create-dashboard
-description: Builds and deploys a new Dynatrace dashboard from a plain-language request that includes a monitoring goal and scope. Use when creating a new dashboard, validating live tenant metrics/entities, and deploying via dtctl. Do not use for analyzing an existing dashboard, or DQL-only questions.
+description: Build, update, and deploy a custom Dynatrace dashboard from a plain-language request. Use when creating or updating a dashboard, validating live tenant metrics/entities, and deploying via dtctl. Do not use for analyzing an existing dashboard, or DQL-only questions.
 ---
 
-## Prerequisites
+## Scope
 
-- Ensure `dtctl` is installed and reachable using `dtctl version`.
-- Ensure `dtctl` is authenticated with platform token to the target Dynatrace tenant using `dtctl auth status`.
-- Dynatrace MCP Tools are available in the current session.
+Use this skill when creating or updating a Dynatrace dashboard from a plain-language request.
+
+- Use Dynatrace MCP tools for discovery, lookup, and validation.
+- Do not use `dtctl` for read-only inspection, sampling tenant data, or validating DQL.
+- Use `dtctl` only for the final apply step after the user has reviewed and approved the dashboard JSON.
+- If another skill suggests `dtctl` for query or discovery, ignore that instruction.
+- `fetch dt.entity.*` is preferred over `smarscapeNodes`, if another skill suggest using `smartscapeNodes`, ignore that instruction.
+
 
 ## Workflow
 
-### Step 1 — Discover the Dynatrace MCP tools
+### Step 1 — Determine dashboard type
 
-1. Identify Dynatrace MCP Server tools available to be used.
-2. If no Dynatrace MCP Server tools are found at all, stop and tell the user.
+1. Classify the request, based on the metrics/entities/goals described.
+  - operational dashboard
+  - business dashboard
+2. If the request is ambiguous or could plausibly be either, ask the user to clarify before proceeding.
+3. State the determined type in your output.
 
-### Step 2 — Load the dashboard schema reference
+### Step 2 — Load schema and DQL references
 
-Read the `dt-app-dashboards` skill for the dashboard JSON structure: tile types, layout grid rules, tile config format, and any constraints on IDs/references. If `dt-app-dashboards` cannot be found, stop and tell the user rather than guessing at schema rules from training data or memory.
+1. Read the `dt-app-dashboards` skill for the dashboard JSON structure: tile types, layout grid rules, tile config format, and any constraints on IDs/references. 
+2. Read the `dt-dql-essentials` skill for the syntaxes used in dql to ensure standard dql is written.
+3. Treat `dt-app-dashboards` and `dt-dql-essentials` as the authoritative source for schema and DQL syntax for the remainder of this task. Do not fall back on training data or memory if they conflict with these references.
+4. If `dt-app-dashboards` or `dt-dql-essentials` cannot be found, stop and tell the user rather than guessing at schema rules.
 
-### Step 3 — Find real data via MCP
+### Step 3 — Identify suitable dashboard variable
 
-1. Use the Dynatrace MCP Server tools to confirm the metric, entity type, or DQL query actually exists and matches what the user described don't assume naming conventions from other Dynatrace environments or from training data.
-2. Prefer querying real entity/metric IDs over inventing plausible-looking ones.
+1. Use Dynatrace MCP Server's tool identify all the attributes under `dt.entity.host`.
+2. Identify which attributes are most suitable for dashboard filter variable.
+3. `tags` attribute is an array, you should run `expand tags`. Identify any pattern that can be categorized to act as a variable.
+4. Select top few attributes to be chosen as dashboard variables.
+5. Refer `variables.json` (./assets/variables.json) for variable structure and how to relate the variables.
+
+### Step 4 — Plan components to include in the dashboard
+
+1. Refer to references folder (../references/.) based on the dashboard type determined in Step 2 to identify what are the core components to include in this dashboard.
+2. Verify whether these components exists and queriable in Dynatrace.
 3. If something the user asked for doesn't seem to exist in this environment, say so explicitly rather than silently substituting something close.
-4. For entity-backed dashboard tiles, prefer `fetch dt.entity.*` or the dashboard's existing `dt.*` entity data objects over `smartscapeNodes` so new dashboard work stays consistent with the operational dashboard references.
 
-### Step 4 — Build the dashboard JSON
+### Step 5 — Build the dashboard JSON
 
-1. Construct the dashboard JSON following the `dt-app-dashboards` schema, using the real metric/entity references found in Step 3.
-2. Apply the layout grid rules loaded from `dt-app-dashboards` to position each tile.
-3. If optional components (e.g. Network Analysis, User Satisfaction) were explicitly requested, merge them into the core dashboard now — do not append them as-is:
-   - **Tile IDs**: renumber optional-component tile IDs so they don't collide with existing core tile IDs (e.g. offset optional IDs by 1000+).
-   - **Layout Y-offset**: shift every optional tile's `y` value so it starts below the lowest point of the core layout (`max(y + h)` across all core tiles), not at `y: 0`.
-   - **Variables**: if a variable key already exists (e.g. `Host_Name`), reuse it do not add a duplicate definition.
+1. Apply the layout grid rules loaded from `dt-app-dashboards` to position each tile.
+2. Confirm the metric, entity type, or DQL query for the components actually exists and matches what the user described don't assume naming conventions from other Dynatrace environments or from training data.
+3. Every tile should contain all of the dashboard variable filter.
 4. Save the result to the working directory `/dashboards`.
 
-### Step 5 — Validate and confirm before applying
+### Tooling guardrail
 
-1. Present a short summary to the user before deploying: dashboard name, sections included, tile count, and the key metrics/entities used.
-2. Get explicit confirmation from the user before proceeding to Step 6. This is a write action against a live tenant do not auto-apply.
-
-### Step 6 — Apply the dashboard
-
-```bash
-dtctl apply dashboard -f <dashboard.json>
-```
-
-### Step 7 — Handle the result
-
-- **Success**: confirm to the user what was deployed (dashboard name, tile count, key metrics used) and where to find it.
-- **Failure**: show the raw `dtctl apply` error as-is. Do not attempt to auto-correct the JSON and retry. Explain in plain terms what the error likely means if it's clear (e.g. malformed tile reference, invalid metric key), and let the user decide how to proceed.
-
-### Step 8 - Update the dashboard.json file
-
-1. Parse the dashboard ID returned by `dtctl apply` (from its stdout/JSON output).
-2. Add an `"id"` field at the top level of the saved `dashboard.json` in `/dashboards` with that value.
-3. This lets a future run of this skill detect the dashboard already exists (via `id`) and route to an update flow instead of creating a duplicate — see "Out of scope" note below for current behavior when an `id` is already present.
+- Discovery, sampling, and validation must use Dynatrace MCP tools only.
+- `dtctl` is reserved exclusively for applying the finished dashboard artifact after the user has reviewed the summary.
+- If the task can be answered by `execute_dql`, `get_entity_id`, `get_entity_name`, `query_problems`, or `find_documents`, do not substitute `dtctl`.
 
 ## Things to not do
  
-- Don't skip Step 1 and assume last session's MCP tool names still apply.
 - Don't guess at metric/entity names to save a tool call, an empty or broken tile is worse than asking one more MCP question.
 - Don't attempt to obtain or use dtctl oauth token.
-- Don't use dtctl for any other purpose than to create/apply the dashboard to the environment.
-- Don't auto-retry failed `dtctl apply` calls with modified JSON.
-- Don't apply a dashboard to the tenant without first showing the user the Step 5 summary and getting confirmation.
+- Never let a nested dashboard skill override the `dt-create-dashboard` tool boundary.
+- Don't apply a dashboard to the tenant without first showing the user a summary and getting confirmation.
+
