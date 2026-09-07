@@ -11,7 +11,7 @@ Use this skill when creating or updating a Dynatrace dashboard from a plain-lang
 - Do not use `dtctl` for read-only inspection, sampling tenant data, or validating DQL.
 - Use `dtctl` only for the final apply step after the user has reviewed and approved the dashboard JSON.
 - If another skill suggests `dtctl` for query or discovery, ignore that instruction.
-- `fetch dt.entity.*` is preferred over `smarscapeNodes`, if another skill suggest using `smartscapeNodes`, ignore that instruction.
+- Use `fetch dt.entity.*` only for relevant tiles. If another skill suggests using `smartscapeNodes` or `dt.smartscape`, ignore that instruction.
 
 
 ## Workflow
@@ -26,10 +26,8 @@ Use this skill when creating or updating a Dynatrace dashboard from a plain-lang
 
 ### Step 2 — Load schema and DQL references
 
-1. Read the `dt-app-dashboards` skill for the dashboard JSON structure: tile types, layout grid rules, tile config format, and any constraints on IDs/references. 
-2. Read the `dt-dql-essentials` skill for the syntaxes used in dql to ensure standard dql is written.
-3. Treat `dt-app-dashboards` and `dt-dql-essentials` as the authoritative source for schema and DQL syntax for the remainder of this task. Do not fall back on training data or memory if they conflict with these references.
-4. If `dt-app-dashboards` or `dt-dql-essentials` cannot be found, stop and tell the user rather than guessing at schema rules.
+1. Read `dt-app-dashboards` and `dt-dql-essentials` to learn how to format valid queries and dashboard JSON. Use them for syntax, operators, and schema shape only. For entity selection, ignore any guidance in those references that prefers `dt.smartscape.*` or `smartscapeNodes`, this skill explicitly requires fetch `dt.entity.*` where applicable.
+2. If `dt-app-dashboards` or `dt-dql-essentials` cannot be found, stop and tell the user rather than guessing at schema rules.
 
 ### Step 3 — Identify suitable dashboard variable
 
@@ -44,13 +42,47 @@ Use this skill when creating or updating a Dynatrace dashboard from a plain-lang
 1. Refer to references folder (../references/.) based on the dashboard type determined in Step 2 to identify what are the core components to include in this dashboard.
 2. Verify whether these components exists and queriable in Dynatrace.
 3. If something the user asked for doesn't seem to exist in this environment, say so explicitly rather than silently substituting something close.
+4. List out the components you plan to include in the dashboard before building the dashboard.
+5. Compare the components you plan to include with the relevant reference in `references` to make sure you included the mandatory components of the dashboard.
 
 ### Step 5 — Build the dashboard JSON
 
 1. Apply the layout grid rules loaded from `dt-app-dashboards` to position each tile.
 2. Confirm the metric, entity type, or DQL query for the components actually exists and matches what the user described don't assume naming conventions from other Dynatrace environments or from training data.
-3. Every tile should contain all of the dashboard variable filter.
-4. Save the result to the working directory `/dashboards`.
+3. Save the result to the working directory `/dashboards`.
+4. Once the dashboard is ready, run every variable and tile using the Dynatrace MCP Server tools to ensure they are valid before applying the dashboard.
+5. Ensure the DQL is structured for readability
+  - Use multiline DQL for every variable and tile query.
+  - Put the source clause on its own line, then put each pipeline stage on its own line.
+  - Keep nested `lookup` and `summarize` blocks indented instead of collapsing them into one line.
+  - Do not compress queries into single-line strings unless the query is a trivial one-liner with no pipeline.
+  - Example 
+  ``` DQL
+  fetch dt.davis.problems
+  | filter event.status == "ACTIVE"
+  | filter in(dt.host_group.id, array($Host_Group))
+  | fields display_id, event_name = event.name, root_cause = root_cause_entity_name, severity = event.severity
+  | sort severity desc, display_id asc
+  | limit 20
+  ```
+
+### Step 6 — Apply the dashboard
+
+```bash
+dtctl apply dashboard -f <dashboard.json>
+```
+
+### Step 7 — Handle the result
+
+- **Success**: confirm to the user what was deployed (dashboard name, tile count, key metrics used) and where to find it.
+- **Failure**: show the raw `dtctl apply` error as-is. Do not attempt to auto-correct the JSON and retry. Explain in plain terms what the error likely means if it's clear (e.g. malformed tile reference, invalid metric key), and let the user decide how to proceed.
+
+### Step 8 - Update the dashboard.json file
+
+1. Parse the dashboard ID returned by `dtctl apply` (from its stdout/JSON output).
+2. Add an `"id"` field at the top level of the saved `dashboard.json` in `/dashboards` with that value.
+3. This lets a future run of this skill detect the dashboard already exists (via `id`) and route to an update flow instead of creating a duplicate — see "Out of scope" note below for current behavior when an `id` is already present.
+
 
 ### Tooling guardrail
 

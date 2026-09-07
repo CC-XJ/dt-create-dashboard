@@ -6,7 +6,7 @@
         "key": "Host_Group",
         "visible": true,
         "type": "query",
-        "version": 2,
+        "version": 1,
         "editable": true,
         "input": "fetch dt.entity.host\n| fields hostGroupName\n| dedup hostGroupName\n",
         "multiple": true
@@ -15,7 +15,7 @@
         "key": "Tag_Categories",
         "visible": true,
         "type": "query",
-        "version": 2,
+        "version": 1,
         "editable": true,
         "input": "fetch dt.entity.host \n| filter in(hostGroupName, array($Host_Group)) \n| fields tags \n| expand tags \n|parse tags, \"\"\"LD: category << ':' LD: value\"\"\"\n| filter category = {variable_category} \n| fields value \n| dedup value \n| sort value asc",
         "multiple": true
@@ -24,7 +24,7 @@
         "key": "Host_Name",
         "visible": true,
         "type": "query",
-        "version": 2,
+        "version": 1,
         "editable": true,
         "input": "fetch dt.entity.host\n| fieldsAdd hostGroupName, tags\n| filter in (hostGroupName, array($Host_Group))\n| filter in (tags, array($Tags))\n| fields entity.name",
         "multiple": true
@@ -33,18 +33,27 @@
         "key": "Host_ID",
         "visible": false,
         "type": "query",
-        "version": 2,
+        "version": 1,
         "editable": true,
         "input": "fetch dt.entity.host\n| filter in (entity.name, array($Host_Name))\n| fields id",
         "multiple": true
       },
       {
-        "version": 2,
         "key": "Running_Service",
-        "type": "query",
         "visible": false,
+        "type": "query",
+        "version": 1,
         "editable": true,
         "input": "smartscapeNodes \"SERVICE\"\n| fields id, name\n\n| lookup [\n  smartscapeEdges \"*\"\n  | filter type == \"runs_on\"\n  | filter in (toString(target_id), array($Host_ID))\n  | fields source_id, target_id\n], sourceField:id, lookupField:source_id\n\n| filterOut isNull(lookup.source_id)\n| fields id",
+        "multiple": true
+      },
+      {
+        "key": "Running_Database",
+        "visible": false, 
+        "type": "query",
+        "version": 1,
+        "editable": true,
+        "input": "fetch dt.entity.service \n| fieldsAdd id, entity.name, serviceType, service_calling = called_by[dt.entity.service]\n| filter serviceType == \"DATABASE_SERVICE\"\n| expand service_calling\n| filter in(service_calling, array($Running_Service))\n| fields id\n| dedup id",
         "multiple": true
       }
     ]
